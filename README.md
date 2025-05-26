@@ -1,4 +1,11 @@
-CLASS: Cosmic Linear Anisotropy Solving System  {#mainpage}
+CLASS LONG RANGE  {#mainpage}
+
+An attempt to implement long range interactions mediated by a scalar within dark matter. Based on descriptions from 2204.08484.
+
+
+
+
+CLASS: Cosmic Linear Anisotropy Solving System 
 ==============================================
 
 Authors: Julien Lesgourgues, Thomas Tram, Nils Schoeneberg
