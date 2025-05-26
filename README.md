@@ -5,6 +5,8 @@ An attempt to implement long range interactions mediated by a scalar within dark
 
 All my modifications should start with comments LONG RANGE START and end with LONG RANGE END, so searching for this in files should be enough to see what changed wrt original CLASS.
 
+notebooks/LongRange_tests.ipynb is a notebook in which I perform most of the comparisions with the mentioned article. 
+
 The stuff below is the usual CLASS readme.
 
 
