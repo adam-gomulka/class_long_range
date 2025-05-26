@@ -5481,7 +5481,7 @@ int perturbations_initial_conditions(struct precision * ppr,
          *  with \f$ c_s^2 = 1 \f$ and w = 1/3 (ASSUMES radiation TRACKING)
          */
 
-        ppw->pv->y[ppw->pv->index_pt_phi_scf] = 0.;
+        ppw->pv->y[ppw->pv->index_pt_phi_scf] = 1/4.*ppw->pvecback[pba->index_bg_phi_prime_scf]*tau*ppw->pv->y[ppw->pv->index_pt_delta_g]; 
         /*  a*a/k/k/ppw->pvecback[pba->index_bg_phi_prime_scf]*k*ktau_three/4.*1./(4.-6.*(1./3.)+3.*1.) * (ppw->pvecback[pba->index_bg_rho_scf] + ppw->pvecback[pba->index_bg_p_scf])* ppr->curvature_ini * s2_squared; */
 
         ppw->pv->y[ppw->pv->index_pt_phi_prime_scf] = 0.;
@@ -5751,6 +5751,7 @@ int perturbations_initial_conditions(struct precision * ppr,
 
       /* scalar field: check */
       if (pba->has_scf == _TRUE_) {
+        // Modifying eoms for scalar field in synchronous gauge probably requires also modification of this conversion
         alpha_prime = 0.0;
         /* - 2. * a_prime_over_a * alpha + eta
            - 4.5 * (a2/k2) * ppw->rho_plus_p_shear; */
@@ -5760,6 +5761,9 @@ int perturbations_initial_conditions(struct precision * ppr,
           (-2.*a_prime_over_a*alpha*ppw->pvecback[pba->index_bg_phi_prime_scf]
            -a*a* dV_scf(pba,ppw->pvecback[pba->index_bg_phi_scf])*alpha
            +ppw->pvecback[pba->index_bg_phi_prime_scf]*alpha_prime);
+        if (pba->beta != 0.0) {
+          ppw->pv->y[ppw->pv->index_pt_phi_prime_scf] += -a*a*3*sqrt(pba->G_S)*ppw->pvecback[pba->index_bg_rho_cdm]*dlogm_chi(pba, ppw->pvecback[pba->index_bg_phi_scf])*alpha;
+        }
       }
 
       if ((pba->has_ur == _TRUE_) || (pba->has_ncdm == _TRUE_) || (pba->has_dr == _TRUE_)  || (pba->has_idr == _TRUE_)) {
@@ -8484,7 +8488,7 @@ int perturbations_print_variables(double tau,
       }
 
       if (pba->has_scf == _TRUE_) {
-        delta_scf += alpha*(-3.0*H*(1.0+pvecback[pba->index_bg_p_scf]/pvecback[pba->index_bg_rho_scf]));
+        delta_scf += alpha*(-3.0*a*H*(1.0+pvecback[pba->index_bg_p_scf]/pvecback[pba->index_bg_rho_scf]));
         theta_scf += k*k*alpha;
       }
 
@@ -9223,12 +9227,29 @@ int perturbations_derivs(double tau,
       /** - ----> newtonian gauge: cdm density and velocity */
 
       if (ppt->gauge == newtonian) {
-        dy[pv->index_pt_delta_cdm] = -(y[pv->index_pt_theta_cdm]+metric_continuity); /* cdm density */
+        /* Compute base evolution*/
+        dy[pv->index_pt_delta_cdm] = -(y[pv->index_pt_theta_cdm]+metric_continuity);
 
-        dy[pv->index_pt_theta_cdm] = - a_prime_over_a*y[pv->index_pt_theta_cdm] + metric_euler; /* cdm velocity */
-      }
+        /* Add coupling effect to density equation separately */
+        if (pba->beta != 0.0) {
+          double coupling_term_1 = dlogm_chi(pba, pvecback[pba->index_bg_phi_scf]) * sqrt(pba->G_S) * y[pv->index_pt_phi_prime_scf];
+          double coupling_term_2 = ddlogm_chi(pba, pvecback[pba->index_bg_phi_scf]) * pba->G_S * pvecback[pba->index_bg_phi_prime_scf] * y[pv->index_pt_phi_scf];
+          dy[pv->index_pt_delta_cdm] += coupling_term_1 + coupling_term_2;
+        }
 
-      /** - ----> synchronous gauge: cdm density only (velocity set to zero by definition of the gauge) */
+        dy[pv->index_pt_theta_cdm] = -a_prime_over_a*y[pv->index_pt_theta_cdm] + metric_euler;
+
+        if (pba->beta != 0.0) {
+          /* Add coupling terms separately */
+          double hubble_coupling = -dlogm_chi(pba, pvecback[pba->index_bg_phi_scf])*sqrt(pba->G_S)*pvecback[pba->index_bg_phi_prime_scf] * y[pv->index_pt_theta_cdm];
+          double metric_coupling = +k2*dlogm_chi(pba, pvecback[pba->index_bg_phi_scf]) * sqrt(pba->G_S) * y[pv->index_pt_phi_scf];
+                  
+          dy[pv->index_pt_theta_cdm] += hubble_coupling + metric_coupling;
+        }
+
+        }
+
+      /** - ----> synchronous gauge: cdm density only (velocity set to zero by definition of the gauge) */ /* AG: In adaibatic limit this seems to be alrigth, but in general it would probably be better to create a different species for our DM and have some other small component of CDM to define sync gauge correctly */
 
       if (ppt->gauge == synchronous) {
         dy[pv->index_pt_delta_cdm] = -metric_continuity; /* cdm density */
@@ -9399,11 +9420,16 @@ int perturbations_derivs(double tau,
       dy[pv->index_pt_phi_scf] = y[pv->index_pt_phi_prime_scf];
 
       /** - ----> Klein Gordon equation */
+      // Remember that phi is given in units of Mpl
 
       dy[pv->index_pt_phi_prime_scf] =  - 2.*a_prime_over_a*y[pv->index_pt_phi_prime_scf]
         - metric_continuity*pvecback[pba->index_bg_phi_prime_scf] //  metric_continuity = h'/2
         - (k2 + a2*pvecback[pba->index_bg_ddV_scf])*y[pv->index_pt_phi_scf]; //checked
-
+      if (pba->beta != 0.0) {
+        dy[pv->index_pt_phi_prime_scf] += 
+        - 3* a2 * sqrt(pba->G_S)*pvecback[pba->index_bg_rho_cdm]*dlogm_chi(pba, pvecback[pba->index_bg_phi_scf])*y[pv->index_pt_delta_cdm] // factor of three appears due to units in which rho and G_S are written i.e.
+        - 3* a2 * pba->G_S*pvecback[pba->index_bg_rho_cdm]*ddlogm_chi(pba, pvecback[pba->index_bg_phi_scf])*y[pv->index_pt_phi_scf]; // \rho^{class} = 1/(3 m_{pl}^2) \rho^{physical} and G_S^class = G_S^physical*(m_{pl}^2)
+      }
     }
 
     /** - ---> ultra-relativistic neutrino/relics (ur) */

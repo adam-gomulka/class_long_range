@@ -98,6 +98,8 @@ struct background
   int * ncdm_input_q_size; /**< Vector of numbers of q bins */
   double * ncdm_qmax;      /**< Vector of maximum value of q */
 
+  double m_scf; /**< mass of the scalar field */
+
   double Omega0_k;         /**< \f$ \Omega_{0_k} \f$: curvature contribution */
 
   double Omega0_lambda;    /**< \f$ \Omega_{0_\Lambda} \f$: cosmological constant */
@@ -118,6 +120,16 @@ struct background
   double phi_ini_scf;      /**< \f$ \phi(t_0) \f$: scalar field initial value */
   double phi_prime_ini_scf;/**< \f$ d\phi(t_0)/d\tau \f$: scalar field initial derivative wrt conformal time */
   int scf_parameters_size; /**< size of scf_parameters */
+
+
+  /** LONG RANGE START */
+
+  double beta; /**< \f$ \beta \f$: coupling constant for interacting scalar field with DM */
+  double G_S; /**< \f$ G_S \f$: Similar to G_N, defined via relation to beta as beta = G_S/(4 pi G_N) */
+
+  /** LONG RANGE END */
+
+
   double varconst_alpha; /**< finestructure constant for varying fundamental constants */
   double varconst_me; /**< electron mass for varying fundamental constants */
   enum varconst_dependence varconst_dep; /**< dependence of the varying fundamental constants as a function of time */
@@ -562,6 +574,21 @@ extern "C" {
                  double phi
                  );
 
+  double m_chi(
+               struct background *pba,
+               double phi
+               );
+
+  double dlogm_chi(
+                  struct background *pba,
+                  double phi
+                  );
+
+  double ddlogm_chi(
+                  struct background *pba,
+                  double phi
+                  );
+
   /** Coupling between scalar field and matter **/
   double Q_scf(
                struct background *pba,
@@ -589,6 +616,7 @@ extern "C" {
 #define _c_ 2.99792458e8            /**< c in m/s */
 #define _G_ 6.67428e-11             /**< Newton constant in m^3/Kg/s^2 */
 #define _eV_ 1.602176487e-19        /**< 1 eV expressed in J */
+#define _eV_over_Mpc_   1.56e29 /**< eV to Mpc^-1 conversion  */
 
 /* parameters entering in Stefan-Boltzmann constant sigma_B */
 #define _k_B_ 1.3806504e-23

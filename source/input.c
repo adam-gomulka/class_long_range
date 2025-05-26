@@ -6,6 +6,7 @@
  */
 
 #include "input.h"
+#include <sys/resource.h>
 
 /* The input module fills variables belonging to the structures of
    essentially all other modules. Thus we need to include all the
@@ -526,6 +527,7 @@ int input_shooting(struct file_content * pfc,
   int target_indices[_NUM_TARGETS_];
   int needs_shooting;
   int shooting_failed=_FALSE_;
+  double Omega_r;
 
   /* array of parameters passed by the user for which we need shooting (= target parameters) */
   char * const target_namestrings[] = {"100*theta_s",
@@ -533,7 +535,8 @@ int input_shooting(struct file_content * pfc,
                                        "Neff",
                                        "Omega_dcdmdr",
                                        "omega_dcdmdr",
-                                       "Omega_scf",
+                                       //"alpha_lrm_1",
+                                       //"Omega_scf",
                                        "Omega_ini_dcdm",
                                        "omega_ini_dcdm"};
 
@@ -543,7 +546,8 @@ int input_shooting(struct file_content * pfc,
                                         "N_ur",                     /* unknown param for target 'Neff' */
                                         "Omega_ini_dcdm",           /* unknown param for target 'Omega_dcdmd' */
                                         "omega_ini_dcdm",           /* unknown param for target 'omega_dcdmdr' */
-                                        "scf_shooting_parameter",   /* unknown param for target 'Omega_scf' */
+                                        //"scf_shooting_parameter",   /* unknown param for target 'Omega_scf' */
+                                        //"Omega0_lambda",               /* unknown param for target 'alpha_lrm_1' */
                                         "Omega_dcdmdr",             /* unknown param for target 'Omega_ini_dcdm' */
                                         "omega_dcdmdr"};             /* unknown param for target 'omega_ini_dcdm' */
 
@@ -555,7 +559,7 @@ int input_shooting(struct file_content * pfc,
                                         cs_background,     /* computation stage for target 'Neff' */
                                         cs_background,     /* computation stage for target 'Omega_dcdmdr' */
                                         cs_background,     /* computation stage for target 'omega_dcdmdr' */
-                                        cs_background,     /* computation stage for target 'Omega_scf' */
+                                        //cs_background,     /* computation stage for target 'Omega_scf' */
                                         cs_background,     /* computation stage for target 'Omega_ini_dcdm' */
                                         cs_background};     /* computation stage for target 'omega_ini_dcdm' */
 
@@ -876,7 +880,8 @@ int input_needs_shooting_for_target(struct file_content * pfc,
   switch (target_name){
   case Omega_dcdmdr:
   case omega_dcdmdr:
-  case Omega_scf:
+  //case Omega_scf:
+  //case alpha_lrm_1:
   case Omega_ini_dcdm:
   case omega_ini_dcdm:
     /* Check that Omega's or omega's are nonzero: */
@@ -920,7 +925,7 @@ int input_find_root(double *xzero,
   int iter, iter2;
   int return_function;
 
-  /** Fisrt we do our guess */
+  /** First we do our guess */
   class_call(input_get_guess(&x1, &dxdy, pfzw, errmsg),
              errmsg,
              errmsg);
@@ -1155,7 +1160,7 @@ int input_get_guess(double *xguess,
   struct distortions sd;      /* for spectral distortions */
   struct output op;           /* for output files */
   int i;
-  double Omega_M, a_decay, gamma, Omega0_dcdmdr=1.0;
+  double Omega_M, Omega_r, a_decay, gamma, Omega0_dcdmdr=1.0, Omega_tot;
   int index_guess;
   int index_ncdm; double N_nonur_guess = 0.0;
 
@@ -1223,24 +1228,6 @@ int input_get_guess(double *xguess,
         a_decay = pow(1+(gamma*gamma-1.)/Omega_M,-1./3.);
       xguess[index_guess] = pfzw->target_value[index_guess]/ba.h/ba.h/a_decay;
       dxdy[index_guess] = 1./a_decay/ba.h/ba.h;
-      break;
-    case Omega_scf:
-      /* *
-       * This guess is arbitrary, something nice using WKB should be implemented.
-       * Version 2 uses a fit
-       * xguess[index_guess] = 1.77835*pow(ba.Omega0_scf,-2./7.);
-       * dxdy[index_guess] = -0.5081*pow(ba.Omega0_scf,-9./7.)`;
-       * Version 3: use attractor solution
-       * */
-      if (ba.scf_tuning_index == 0){
-        xguess[index_guess] = sqrt(3.0/ba.Omega0_scf);
-        dxdy[index_guess] = -0.5*sqrt(3.0)*pow(ba.Omega0_scf,-1.5);
-      }
-      else{
-        /* Default: take the passed value as xguess and set dxdy to 1. */
-        xguess[index_guess] = ba.scf_parameters[ba.scf_tuning_index];
-        dxdy[index_guess] = 1.;
-      }
       break;
     case omega_ini_dcdm:
       Omega0_dcdmdr = 1./(ba.h*ba.h);
@@ -1470,10 +1457,6 @@ int input_try_unknown_parameters(double * unknown_parameter,
         rho_dr_today = 0.;
       output[i] = (rho_dcdm_today+rho_dr_today)/(ba.H0*ba.H0)-pfzw->target_value[i]/ba.h/ba.h;
       break;
-    case Omega_scf:
-      /** In case scalar field is used to fill, pba->Omega0_scf is not equal to pfzw->target_value[i].*/
-      output[i] = ba.background_table[(ba.bt_size-1)*ba.bg_size+ba.index_bg_rho_scf]/(ba.H0*ba.H0)-ba.Omega0_scf;
-      break;
     case Omega_ini_dcdm:
     case omega_ini_dcdm:
       rho_dcdm_today = ba.background_table[(ba.bt_size-1)*ba.bg_size+ba.index_bg_rho_dcdm];
@@ -1667,6 +1650,97 @@ int input_read_parameters(struct file_content * pfc,
                                            errmsg),
              errmsg,
              errmsg);
+
+    /* LONG RANGE START */
+    /** Automatically infer Omega0_lambda from all other densities **/
+  
+    #define MAX_OMEGA_LAMBDA_ITERS 10
+    #define OMEGA_LAMBDA_TOL 1e-5
+    
+    if (pba->Omega0_scf != 0.) {
+    
+      double inferred_Omega0_lambda = 0.0;
+      double prev_Omega0_lambda = -1.0;
+      double H = pba->H0;
+      double req_rho_tot = pow(H, 2);
+      double h = pba->h;
+      int iter = 0;
+
+      // Create a single background structure that will be reused
+      struct background ba_temp;
+      struct precision pr_temp;
+      
+      // Start with some initial guess (e.g., 0.7 or 1 - known matter/rad)
+      pba->Omega0_lambda = 0.7;
+
+      // Initialize precision structure once outside the loop
+      class_call(input_read_precisions(pfc, &pr_temp, &ba_temp, pth, ppt, ptr, ppm, phr, pfo, ple, psd, pop, errmsg),
+      errmsg, errmsg);
+    
+      while (iter < MAX_OMEGA_LAMBDA_ITERS) {
+        // Copy only the necessary parameters from pba to ba_temp
+        memcpy(&ba_temp, pba, sizeof(struct background));
+        
+        // Set is_allocated to false to ensure proper initialization
+        ba_temp.is_allocated = _FALSE_;
+        
+        if (input_verbose > 0) {
+            printf("[Iter %d] Trying Omega0_lambda = %.15e\n", iter, ba_temp.Omega0_lambda);
+        }
+    
+        // Initialize background
+        class_call(background_init(&pr_temp, &ba_temp),
+                   ba_temp.error_message, errmsg);
+        
+        // Extract needed values
+        double phi_today = ba_temp.background_table[(ba_temp.bt_size-1)*ba_temp.bg_size+ba_temp.index_bg_phi_scf];
+        double omega0_b = ba_temp.Omega0_b*h*h;
+        double omega0_g = ba_temp.Omega0_g*h*h;
+        double omega0_ur = ba_temp.Omega0_ur*h*h;
+        double omega0_chi = ba_temp.Omega0_cdm * (m_chi(pba, phi_today) / m_chi(pba, ba_temp.phi_ini_scf))*h*h; // this is the present day DM density according to Eq. (3.6)
+        double omega0_scf_temp = (ba_temp.background_table[(ba_temp.bt_size-1)*ba_temp.bg_size+ba_temp.index_bg_rho_scf] / 
+                             req_rho_tot)*h*h;
+        double omega0_ncdm = 0.0;
+        if (ba_temp.has_ncdm == _TRUE_) {
+            for (int index_ncdm = 0; index_ncdm < ba_temp.N_ncdm; ++index_ncdm) {
+                omega0_ncdm += ba_temp.Omega0_ncdm[index_ncdm] * h * h;
+            }
+        }
+        
+        // Update the main structure's Omega0_scf
+        pba->Omega0_scf = omega0_scf_temp/h/h;
+        
+        // Calculate total omega and infer lambda
+        double omega_tot = omega0_b + omega0_g + omega0_ur + omega0_ncdm + omega0_chi + omega0_scf_temp;
+        inferred_Omega0_lambda = fabs(h*h - omega_tot)/h/h;
+    
+        printf("[Iter %d] Omega0_lambda = %.15e (change = %.3e)\n", iter, inferred_Omega0_lambda, fabs(inferred_Omega0_lambda - prev_Omega0_lambda));
+    
+        // Update values for next iteration
+        pba->Omega0_lambda = inferred_Omega0_lambda;
+        prev_Omega0_lambda = inferred_Omega0_lambda;
+
+        // Check for convergence
+        if (fabs(inferred_Omega0_lambda - prev_Omega0_lambda) < OMEGA_LAMBDA_TOL) {
+            class_call(background_free(&ba_temp),
+            ba_temp.error_message, errmsg);
+            break;
+        }
+        
+        // Free background resources before next iteration
+        class_call(background_free(&ba_temp),
+                   ba_temp.error_message, errmsg);
+
+        iter++;
+      }
+    
+      if (iter == MAX_OMEGA_LAMBDA_ITERS) {
+        class_stop(errmsg, "Omega0_lambda inference did not converge after %d iterations", MAX_OMEGA_LAMBDA_ITERS);
+      }
+
+    }
+
+  /* LONG RANGE END */
 
   /** Read parameters for exotic energy injection quantities */
   class_call(input_read_parameters_injection(pfc,ppr,pth,
@@ -3185,13 +3259,24 @@ int input_read_parameters_species(struct file_content * pfc,
   class_call(parser_read_double(pfc,"Omega_scf",&param3,&flag3,errmsg),
              errmsg,
              errmsg);
+
+  // pba->Omega0_scf = param3;
+  // pba->Omega0_lambda = param1;
+
+  /* LONG RANGE START*/
+  // Here CLASS is reading the values of beta and then computes G_S in my chosen units
+  class_read_double("beta", pba->beta);
+  pba->G_S = pba->beta/2; // In units of 1/M_pl^2; G_S = beta * 4*_PI_*_G_ = beta/2 * 1/m_Pl^2 where m_Pl = 1/sqrt(8*_PI_*_G_) is the reduced Planck mass;
+  
+  /* LONG RANGE END */
+
   /* Test */
-  class_test((flag1 == _TRUE_) && (flag2 == _TRUE_) && ((flag3 == _FALSE_) || (param3 >= 0.)),
-             errmsg,
-             "'Omega_Lambda' or 'Omega_fld' must be left unspecified, except if 'Omega_scf' is set and < 0.");
-  class_test(((flag1 == _FALSE_)||(flag2 == _FALSE_)) && ((flag3 == _TRUE_) && (param3 < 0.)),
-             errmsg,
-             "You have entered 'Omega_scf' < 0 , so you have to specify both 'Omega_lambda' and 'Omega_fld'.");
+  // class_test((flag1 == _TRUE_) && (flag2 == _TRUE_) && ((flag3 == _FALSE_) || (param3 >= 0.)),
+  //            errmsg,
+  //            "'Omega_Lambda' or 'Omega_fld' must be left unspecified, except if 'Omega_scf' is set and < 0.");
+  // class_test(((flag1 == _FALSE_)||(flag2 == _FALSE_)) && ((flag3 == _TRUE_) && (param3 < 0.)),
+  //            errmsg,
+  //            "You have entered 'Omega_scf' < 0 , so you have to specify both 'Omega_lambda' and 'Omega_fld'.");
   /* Complete set of parameters
      Case of (flag3 == _FALSE_) || (param3 >= 0.) means that either we have not
      read Omega_scf so we are ignoring it (unlike lambda and fld!) OR we have
@@ -3201,7 +3286,7 @@ int input_read_parameters_species(struct file_content * pfc,
      2) go through the components in order {lambda, fld, scf} and fill using
      first unspecified component. */
 
-  /* ** BUDGET EQUATION ** -> Add your species here */
+  /* ** BUDGET EQUATION ** -> Add your species here */ /*AG: Remove for now to actually shoot for Omega0_lambda? */
   /* Compute Omega_tot */
   Omega_tot = pba->Omega0_g;
   Omega_tot += pba->Omega0_b;
@@ -3212,7 +3297,7 @@ int input_read_parameters_species(struct file_content * pfc,
   Omega_tot += pba->Omega0_idr;
   Omega_tot += pba->Omega0_ncdm_tot;
   /* Step 1 */
-  if (flag1 == _TRUE_){
+  if (flag1 == _TRUE_ && pba->has_scf == _FALSE_){
     pba->Omega0_lambda = param1;
     Omega_tot += pba->Omega0_lambda;
   }
@@ -3224,7 +3309,7 @@ int input_read_parameters_species(struct file_content * pfc,
     pba->Omega0_scf = param3;
     Omega_tot += pba->Omega0_scf;
   }
-  /* Step 2 */
+  // /* Step 2 */
   if (flag1 == _FALSE_) {
     /* Fill with Lambda */
     pba->Omega0_lambda= 1. - pba->Omega0_k - Omega_tot;
@@ -3232,20 +3317,20 @@ int input_read_parameters_species(struct file_content * pfc,
       printf(" -> matched budget equations by adjusting Omega_Lambda = %g\n",pba->Omega0_lambda);
     }
   }
-  else if (flag2 == _FALSE_) {
-    /* Fill up with fluid */
-    pba->Omega0_fld = 1. - pba->Omega0_k - Omega_tot;
-    if (input_verbose > 0){
-      printf(" -> matched budget equations by adjusting Omega_fld = %g\n",pba->Omega0_fld);
-    }
-  }
-  else if ((flag3 == _TRUE_) && (param3 < 0.)){
-    /* Fill up with scalar field */
-    pba->Omega0_scf = 1. - pba->Omega0_k - Omega_tot;
-    if (input_verbose > 0){
-      printf(" -> matched budget equations by adjusting Omega_scf = %g\n",pba->Omega0_scf);
-    }
-  }
+  // else if (flag2 == _FALSE_) {
+  //   /* Fill up with fluid */
+  //   pba->Omega0_fld = 1. - pba->Omega0_k - Omega_tot;
+  //   if (input_verbose > 0){
+  //     printf(" -> matched budget equations by adjusting Omega_fld = %g\n",pba->Omega0_fld);
+  //   }
+  // }
+  // else if ((flag3 == _TRUE_) && (param3 < 0.)){
+  //   /* Fill up with scalar field */
+  //   pba->Omega0_scf = 1. - pba->Omega0_k - Omega_tot;
+  //   if (input_verbose > 0){
+  //     printf(" -> matched budget equations by adjusting Omega_scf = %g\n",pba->Omega0_scf);
+  //   }
+  // }
 
   /* ** END OF BUDGET EQUATION ** */
 
@@ -3333,28 +3418,33 @@ int input_read_parameters_species(struct file_content * pfc,
         class_test(pba->scf_parameters_size<2,
                    errmsg,
                    "Since you are not using attractor initial conditions, you must specify phi and its derivative phi' as the last two entries in scf_parameters. See explanatory.ini for more details.");
-        pba->phi_ini_scf = pba->scf_parameters[pba->scf_parameters_size-2];
-        pba->phi_prime_ini_scf = pba->scf_parameters[pba->scf_parameters_size-1];
+        /* LONG RANGE START*/       
+        // Modified initial conditions for the scalar field, 
+        // note that scf_parameters are in this weird convention where only the second (i.e. mass of the scalr in units of H0) and the last two entries (initial values) are relevant
+        // I left this like this to be consistent with the previous code, but it is a bit weird
+        pba->phi_ini_scf = 1/sqrt(pba->G_S)*pba->scf_parameters[pba->scf_parameters_size-2]; // s_ini*1/sqrt(G_S)
+        pba->phi_prime_ini_scf = pba->scf_parameters[pba->scf_parameters_size-1]*(-3/4)*pba->beta*(dlogm_chi(pba, pba->phi_ini_scf))*pba->Omega0_cdm/sqrt(pba->Omega0_g+pba->Omega0_ur)*pba->H0;//pba->scf_parameters[pba->scf_parameters_size-1];
+        /* LONG RANGE START */
       }
     }
 
     /** 8.b.3) SCF tuning parameter */
     /* Read */
-    class_read_int("scf_tuning_index",pba->scf_tuning_index);
-    /* Test */
-    class_test(pba->scf_tuning_index >= pba->scf_parameters_size,
-               errmsg,
-               "Tuning index 'scf_tuning_index' (%d) is larger than the number of entries (%d) in 'scf_parameters'.",
-               pba->scf_tuning_index,pba->scf_parameters_size);
+    // class_read_int("scf_tuning_index",pba->scf_tuning_index);
+    // /* Test */
+    // class_test(pba->scf_tuning_index >= pba->scf_parameters_size,
+    //            errmsg,
+    //            "Tuning index 'scf_tuning_index' (%d) is larger than the number of entries (%d) in 'scf_parameters'.",
+    //            pba->scf_tuning_index,pba->scf_parameters_size);
 
-    /** 8.b.4) Shooting parameter */
-    /* Read */
-    class_read_double("scf_shooting_parameter",pba->scf_parameters[pba->scf_tuning_index]);
-    /* Complete set of parameters */
-    scf_lambda = pba->scf_parameters[0];
-    if ((fabs(scf_lambda) < 3.)&&(pba->background_verbose>1)){
-      printf("'scf_lambda' = %e < 3 won't be tracking (for exp quint) unless overwritten by tuning function.",scf_lambda);
-    }
+    // /** 8.b.4) Shooting parameter */
+    // /* Read */
+    // class_read_double("scf_shooting_parameter",pba->scf_parameters[pba->scf_tuning_index]);
+    // /* Complete set of parameters */
+    // scf_lambda = pba->scf_parameters[0];
+    // if ((fabs(scf_lambda) < 3.)&&(pba->background_verbose>1)){
+    //   printf("'scf_lambda' = %e < 3 won't be tracking (for exp quint) unless overwritten by tuning function.",scf_lambda);
+    // }
   }
 
   return _SUCCESS_;
@@ -5891,6 +5981,7 @@ int input_default_params(struct background *pba,
   pba->Omega0_fld = 0.;
   pba->Omega0_scf = 0.;
   pba->Omega0_lambda = 1.-pba->Omega0_k-pba->Omega0_g-pba->Omega0_ur-pba->Omega0_b-pba->Omega0_cdm-pba->Omega0_ncdm_tot-pba->Omega0_dcdmdr - pba->Omega0_idr -pba->Omega0_idm;
+  pba->beta = 0.;
   /** 8.a) Omega fluid */
   /** 8.a.1) PPF approximation */
   pba->use_ppf = _TRUE_;
