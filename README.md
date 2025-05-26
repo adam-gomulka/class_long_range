@@ -3,7 +3,7 @@ CLASS LONG RANGE
 
 An attempt to implement long range interactions mediated by a scalar within dark matter in CLASS. Based on descriptions from 2204.08484.
 
-THe stuff below is usual CLASS readme.
+The stuff below is the usual CLASS readme.
 
 
 CLASS: Cosmic Linear Anisotropy Solving System 
