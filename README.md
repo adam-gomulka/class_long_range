@@ -3,6 +3,8 @@ CLASS LONG RANGE
 
 An attempt to implement long range interactions mediated by a scalar within dark matter in CLASS. Based on descriptions from 2204.08484.
 
+All my modifications should start with comments LONG RANGE START and end with LONG RANGE END, so searching for this in files should be enough to see what changed wrt original CLASS.
+
 The stuff below is the usual CLASS readme.
 
 
