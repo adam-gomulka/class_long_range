@@ -7,7 +7,7 @@ All my modifications should start with comments LONG RANGE START and end with LO
 
 notebooks/LongRange_tests.ipynb is a notebook in which I perform most of the comparisions with the mentioned article. 
 
-The stuff below is the usual CLASS readme.
+The stuff below is the usual CLASS readme with installation instructions.
 
 
 CLASS: Cosmic Linear Anisotropy Solving System 
