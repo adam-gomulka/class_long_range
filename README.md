@@ -4,7 +4,7 @@ CLASS LONG RANGE
 An attempt to implement long range interactions mediated by a scalar within dark matter in CLASS. Based on descriptions from 2204.08484.
 
 All my modifications should start with comments LONG RANGE START and end with LONG RANGE END, so searching for this in files should be enough to see what changed wrt original CLASS.
-The files i modified are input.c, background.c and perturbations.c in source/ (and corresponding header files in include/).
+The files I modified are input.c, background.c and perturbations.c in source/ (and corresponding header files in include/).
 
 notebooks/LongRange_tests.ipynb is a notebook in which I perform most of the comparisions with the mentioned article. You'll probably need to either install or comment out some plotting packages I used there.
 
