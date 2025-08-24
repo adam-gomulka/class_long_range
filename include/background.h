@@ -66,6 +66,10 @@ struct background
   double Omega0_ur; /**< \f$ \Omega_{0 \nu r} \f$: ultra-relativistic neutrinos */
 
   double Omega0_cdm;      /**< \f$ \Omega_{0 cdm} \f$: cold dark matter */
+  
+  /* LONG RANGE START */
+  double Omega0_chi;      /**< \f$ \Omega_{0 chi} \f$: cold dark matter interacting with scalar field */
+  /* LONG RANGE END   */
 
   double Omega0_idm; /**< \f$ \Omega_{0 idm} \f$: interacting dark matter with photons, baryons, and idr */
 
@@ -98,6 +102,8 @@ struct background
   int * ncdm_input_q_size; /**< Vector of numbers of q bins */
   double * ncdm_qmax;      /**< Vector of maximum value of q */
 
+  double m_scf; /**< mass of the scalar field */
+
   double Omega0_k;         /**< \f$ \Omega_{0_k} \f$: curvature contribution */
 
   double Omega0_lambda;    /**< \f$ \Omega_{0_\Lambda} \f$: cosmological constant */
@@ -118,6 +124,17 @@ struct background
   double phi_ini_scf;      /**< \f$ \phi(t_0) \f$: scalar field initial value */
   double phi_prime_ini_scf;/**< \f$ d\phi(t_0)/d\tau \f$: scalar field initial derivative wrt conformal time */
   int scf_parameters_size; /**< size of scf_parameters */
+
+
+  /** LONG RANGE START */
+
+  double beta; /**< \f$ \beta \f$: coupling constant for interacting scalar field with DM */
+  double G_S; /**< \f$ G_S \f$: Similar to G_N, defined via relation to beta as beta = G_S/(4 pi G_N) */
+  double z_tr; /**< \f$ z_{tr} \f$: transition redshift */
+
+  /** LONG RANGE END */
+
+
   double varconst_alpha; /**< finestructure constant for varying fundamental constants */
   double varconst_me; /**< electron mass for varying fundamental constants */
   enum varconst_dependence varconst_dep; /**< dependence of the varying fundamental constants as a function of time */
@@ -164,6 +181,12 @@ struct background
   int index_bg_rho_g;         /**< photon density */
   int index_bg_rho_b;         /**< baryon density */
   int index_bg_rho_cdm;       /**< cdm density */
+  /* LONG RANGE START*/
+  int index_bg_rho_chi;       /**< chi density */
+  int index_bg_beta_tr;       /**< transition parameter */
+  int index_bg_G_S_tr;
+
+  /* LONG RANGE END  */
   int index_bg_rho_idm;       /**< idm density */
   int index_bg_rho_lambda;    /**< cosmological constant density */
   int index_bg_rho_fld;       /**< fluid density */
@@ -291,6 +314,11 @@ struct background
   short has_idr;       /**< presence of interacting dark radiation? */
   short has_curvature; /**< presence of global spatial curvature? */
   short has_varconst;  /**< presence of varying fundamental constants? */
+
+  /* LONG RANGE START */
+  short has_chi;       /**< presence of interacting dark matter (long range)? */
+  short has_transition; /**< presence of transition from zero beta to non-zero? */
+  /* LONG RANGE END   */
 
   //@}
 
@@ -562,6 +590,39 @@ extern "C" {
                  double phi
                  );
 
+  /* LONG RANGE START */
+
+  double m_chi(
+               struct background *pba,
+               double G_S,
+               double phi
+               );
+
+  double dlogm_chi(
+                  struct background *pba,
+                  double G_S,
+                  double phi
+                  );
+
+  double ddlogm_chi(
+                  struct background *pba,
+                  double G_S,
+                  double phi
+                  );
+
+ double smooth_transition(
+                          struct background *pba, 
+                          double a, 
+                          double z_tr
+);
+
+double G_S_effective(
+                      struct background *pba, 
+                      double a
+);
+
+/* LONG RANGE END*/
+
   /** Coupling between scalar field and matter **/
   double Q_scf(
                struct background *pba,
@@ -589,6 +650,7 @@ extern "C" {
 #define _c_ 2.99792458e8            /**< c in m/s */
 #define _G_ 6.67428e-11             /**< Newton constant in m^3/Kg/s^2 */
 #define _eV_ 1.602176487e-19        /**< 1 eV expressed in J */
+#define _eV_over_Mpc_   1.56e29 /**< eV to Mpc^-1 conversion  */
 
 /* parameters entering in Stefan-Boltzmann constant sigma_B */
 #define _k_B_ 1.3806504e-23

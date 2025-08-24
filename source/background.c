@@ -442,6 +442,24 @@ int background_functions(
     rho_m += pvecback[pba->index_bg_rho_cdm];
   }
 
+  /* LONG RANGE START */
+
+  /* chi */
+  if (pba->has_chi == _TRUE_) {
+
+    //double loga = log(a);
+    //double loga_tr = log(1/(1+pba->z_tr));
+    // double width = 1e-2; // width in log(a), e.g., 0.01
+    // double transition = smooth_transition(pba, a, pba->z_tr, width);
+
+    double G_S_eff = G_S_effective(pba, a);
+    
+    pvecback[pba->index_bg_rho_chi] = pba->Omega0_chi * (m_chi(pba, G_S_eff, pvecback_B[pba->index_bi_phi_scf])/m_chi(pba, 0.0, pba->phi_ini_scf)) *pow(pba->H0,2) / pow(a,3);
+    rho_tot += pvecback[pba->index_bg_rho_chi];
+    p_tot += 0.;
+    rho_m += pvecback[pba->index_bg_rho_chi];
+  }
+
   /* idm */
   if (pba->has_idm == _TRUE_) {
     pvecback[pba->index_bg_rho_idm] = pba->Omega0_idm * pow(pba->H0,2) / pow(a,3);
@@ -471,6 +489,7 @@ int background_functions(
 
   /* Scalar field */
   if (pba->has_scf == _TRUE_) {
+    pba->m_scf = pba->scf_parameters[1];
     phi = pvecback_B[pba->index_bi_phi_scf];
     phi_prime = pvecback_B[pba->index_bi_phi_prime_scf];
     pvecback[pba->index_bg_phi_scf] = phi; // value of the scalar field phi
@@ -583,6 +602,7 @@ int background_functions(
 
   /* Total energy density*/
   pvecback[pba->index_bg_rho_tot] = rho_tot;
+  
 
   /* Total pressure */
   pvecback[pba->index_bg_p_tot] = p_tot;
@@ -694,6 +714,9 @@ int background_w_fld(
     Omega_r = pba->Omega0_g * (1. + 3.044 * 7./8.*pow(4./11.,4./3.)); // assumes LambdaCDM + eventually massive neutrinos so light that they are relativistic at equality; needs to be generalised later on.
     Omega_m = pba->Omega0_b;
     if (pba->has_cdm == _TRUE_) Omega_m += pba->Omega0_cdm;
+    /* LONG RANGE START */
+    if (pba->has_chi == _TRUE_) Omega_m += pba->Omega0_chi;
+    /* LONG RANGE END */
     if (pba->has_idm == _TRUE_) Omega_m += pba->Omega0_idm;
     if (pba->has_dcdm == _TRUE_)
       class_stop(pba->error_message,"Early Dark Energy not compatible with decaying Dark Matter because we omitted to code the calculation of a_eq in that case, but it would not be difficult to add it if necessary, should be a matter of 5 minutes");
@@ -868,9 +891,9 @@ int background_free(
              pba->error_message,
              pba->error_message);
 
-  class_call(background_free_input(pba),
-             pba->error_message,
-             pba->error_message);
+  // class_call(background_free_input(pba),
+  //            pba->error_message,
+  //            pba->error_message);
 
   pba->is_allocated = _FALSE_;
 
@@ -946,10 +969,11 @@ int background_free_input(
       free(pba->ncdm_psd_parameters);
   }
 
-  if (pba->Omega0_scf != 0.) {
-    if (pba->scf_parameters != NULL)
-      free(pba->scf_parameters);
-  }
+  // if (pba->Omega0_scf != 0.) {
+  //   if (pba->scf_parameters != NULL)
+  //     free(pba->scf_parameters);
+  // }
+  
   return _SUCCESS_;
 }
 
@@ -1024,6 +1048,17 @@ int background_indices(
   if (pba->varconst_dep != varconst_none)
     pba->has_varconst = _TRUE_;
 
+  /* LONG RANGE START */
+  pba->has_chi = _FALSE_;
+
+  if (pba->Omega0_chi != 0.)
+    pba->has_chi = _TRUE_;
+
+  if (pba->z_tr != -1.)
+    pba->has_transition = _TRUE_;
+  
+  /* LONG RANGE END */
+
   /** - initialize all indices */
 
   index_bg=0;
@@ -1046,6 +1081,15 @@ int background_indices(
 
   /* - index for rho_cdm */
   class_define_index(pba->index_bg_rho_cdm,pba->has_cdm,index_bg,1);
+
+  /* LONG RANGE START */
+  /* - index for rho_chi */
+  class_define_index(pba->index_bg_rho_chi,pba->has_chi,index_bg,1);
+  /* - index for time-dependent beta */
+  class_define_index(pba->index_bg_beta_tr,pba->has_chi && pba->has_transition,index_bg,1);
+  /* index for time-dependent G_S    */
+  class_define_index(pba->index_bg_G_S_tr,pba->has_chi && pba->has_transition,index_bg,1);
+  /* LONG RANGE END */
 
   /* - index for rho_idm  */
   class_define_index(pba->index_bg_rho_idm,pba->has_idm,index_bg,1);
@@ -2098,6 +2142,11 @@ int background_solve(
   pba->Omega0_nfsm =  pba->Omega0_b;
   if (pba->has_cdm == _TRUE_)
     pba->Omega0_nfsm += pba->Omega0_cdm;
+
+  /* LONG RANGE START */
+  if (pba->has_chi == _TRUE_)
+    pba->Omega0_nfsm += pba->Omega0_chi;
+  /* LONG RANGE END */
   if (pba->has_idm == _TRUE_)
     pba->Omega0_nfsm += pba->Omega0_idm;
   if (pba->has_dcdm == _TRUE_)
@@ -2279,7 +2328,7 @@ int background_initial_conditions(
       pvecback_integration[pba->index_bi_phi_prime_scf] = 2.*a*sqrt(V_scf(pba,pvecback_integration[pba->index_bi_phi_scf]))*pba->phi_prime_ini_scf;
     }
     else {
-      printf("Not using attractor initial conditions\n");
+      //printf("Not using attractor initial conditions\n");
       /** - --> If no attractor initial conditions are assigned, gets the provided ones. */
       pvecback_integration[pba->index_bi_phi_scf] = pba->phi_ini_scf;
       pvecback_integration[pba->index_bi_phi_prime_scf] = pba->phi_prime_ini_scf;
@@ -2402,6 +2451,8 @@ int background_find_equality(
   if (pba->background_verbose > 0) {
     printf(" -> radiation/matter equality at z = %f\n",pba->z_eq);
     printf("    corresponding to conformal time = %f Mpc\n",pba->tau_eq);
+    printf(" -> Omega0_lambda = %f \n",pba->Omega0_lambda);
+    // printf(" -> Omega0_lambda+Omega0_scf = %f \n",pba->Omega0_lambda+pba->Omega0_scf);
   }
 
   free(pvecback);
@@ -2440,6 +2491,9 @@ int background_output_titles(
   class_store_columntitle(titles,"(.)rho_g",_TRUE_);
   class_store_columntitle(titles,"(.)rho_b",_TRUE_);
   class_store_columntitle(titles,"(.)rho_cdm",pba->has_cdm);
+  /* LONG RANGE START */
+  class_store_columntitle(titles,"(.)rho_chi",pba->has_chi);
+  /* LONG RANGE START */
   class_store_columntitle(titles,"(.)rho_idm",pba->has_idm);
   if (pba->has_ncdm == _TRUE_) {
     for (n=0; n<pba->N_ncdm; n++) {
@@ -2515,6 +2569,9 @@ int background_output_data(
     class_store_double(dataptr,pvecback[pba->index_bg_rho_g],_TRUE_,storeidx);
     class_store_double(dataptr,pvecback[pba->index_bg_rho_b],_TRUE_,storeidx);
     class_store_double(dataptr,pvecback[pba->index_bg_rho_cdm],pba->has_cdm,storeidx);
+    /* LONG RANGE START */
+    class_store_double(dataptr,pvecback[pba->index_bg_rho_chi],pba->has_chi,storeidx);
+    /* LONG RANGE END */
     class_store_double(dataptr,pvecback[pba->index_bg_rho_idm],pba->has_idm,storeidx);
     if (pba->has_ncdm == _TRUE_) {
       for (n=0; n<pba->N_ncdm; n++) {
@@ -2632,6 +2689,11 @@ int background_derivs(
   if (pba->has_cdm == _TRUE_) {
     rho_M += pvecback[pba->index_bg_rho_cdm];
   }
+  /* LONG RANGE START */
+  if (pba->has_chi == _TRUE_) {
+    rho_M += pvecback[pba->index_bg_rho_chi];
+  }
+  /* LONG RANGE END */
   if (pba->has_idm == _TRUE_){
     rho_M += pvecback[pba->index_bg_rho_idm];
   }
@@ -2653,12 +2715,40 @@ int background_derivs(
     /** - Compute fld density \f$ d\rho/dloga = -3 (1+w_{fld}(a)) \rho \f$ */
     dy[pba->index_bi_rho_fld] = -3.*(1.+pvecback[pba->index_bg_w_fld])*y[pba->index_bi_rho_fld];
   }
-
+  
   if (pba->has_scf == _TRUE_) {
-    /** - Scalar field equation: \f$ \phi'' + 2 a H \phi' + a^2 dV = 0 \f$  (note H is wrt cosmological time)
-        written as \f$ d\phi/dlna = phi' / (aH) \f$ and \f$ d\phi'/dlna = -2*phi' - (a/H) dV \f$ */
-    dy[pba->index_bi_phi_scf] = y[pba->index_bi_phi_prime_scf]/a/H;
-    dy[pba->index_bi_phi_prime_scf] = - 2*y[pba->index_bi_phi_prime_scf] - a*dV_scf(pba,y[pba->index_bi_phi_scf])/H ;
+    double phi = y[pba->index_bi_phi_scf];
+    double phi_prime = y[pba->index_bi_phi_prime_scf];
+
+    // Oridnary scalar field equations
+    dy[pba->index_bi_phi_scf] = phi_prime / (a * H);
+    dy[pba->index_bi_phi_prime_scf] =
+        - 2.0 * phi_prime
+        - a * dV_scf(pba, phi) / H;
+
+    /* LONG RANGE START */
+    // add the coupling term to the scalar field equations if beta != 0
+    if (pba->beta != 0.0) {
+      // double loga = log(a);
+      // double loga_tr = log(1/(1+pba->z_tr));
+      // double width = 1e-2; // width in log(a), e.g., 0.01 dex
+      // double transition = 0.5 * (1.0 + tanh((loga - loga_tr)/width));
+
+      // make G_S undergo transition
+      double G_S_eff = G_S_effective(pba, a);
+
+      double dlogm_chi_val = dlogm_chi(pba, G_S_eff, phi);
+
+      double rho_chi = pvecback[pba->index_bg_rho_chi];
+      double prefactor = 3*G_S_eff;
+      double coupling_term = prefactor * dlogm_chi_val * rho_chi;
+
+      dy[pba->index_bi_phi_prime_scf] += -a * coupling_term/ H;
+
+    }
+
+    /* LONG RANGE END */
+         
   }
 
   return _SUCCESS_;
@@ -2796,11 +2886,15 @@ int background_output_budget(
     printf(" ---------------------------- Budget equation ----------------------- \n");
 
     printf(" ---> Nonrelativistic Species \n");
-    class_print_species("Bayrons",b);
+    class_print_species("Baryons", b);
     budget_matter+=pba->Omega0_b;
     if (pba->has_cdm == _TRUE_) {
       class_print_species("Cold Dark Matter",cdm);
       budget_matter+=pba->Omega0_cdm;
+    }
+    if (pba->has_chi == _TRUE_) {
+      class_print_species("Interacting DM (Long Range)",chi);
+      budget_matter+=pba->Omega0_chi;
     }
     if (pba->has_idm == _TRUE_){
       class_print_species("Interacting DM - idr,b,g",idm);
@@ -2901,38 +2995,38 @@ int background_output_budget(
  and \f$ \rho^{class} \f$ has the proper dimension \f$ Mpc^-2 \f$.
 */
 
-double V_e_scf(struct background *pba,
-               double phi
-               ) {
-  double scf_lambda = pba->scf_parameters[0];
-  //  double scf_alpha  = pba->scf_parameters[1];
-  //  double scf_A      = pba->scf_parameters[2];
-  //  double scf_B      = pba->scf_parameters[3];
+// double V_e_scf(struct background *pba,
+//                double phi
+//                ) {
+//   double scf_lambda = pba->scf_parameters[0];
+//   //  double scf_alpha  = pba->scf_parameters[1];
+//   //  double scf_A      = pba->scf_parameters[2];
+//   //  double scf_B      = pba->scf_parameters[3];
 
-  return  exp(-scf_lambda*phi);
-}
+//   return  exp(-scf_lambda*phi);
+// }
 
-double dV_e_scf(struct background *pba,
-                double phi
-                ) {
-  double scf_lambda = pba->scf_parameters[0];
-  //  double scf_alpha  = pba->scf_parameters[1];
-  //  double scf_A      = pba->scf_parameters[2];
-  //  double scf_B      = pba->scf_parameters[3];
+// double dV_e_scf(struct background *pba,
+//                 double phi
+//                 ) {
+//   double scf_lambda = pba->scf_parameters[0];
+//   //  double scf_alpha  = pba->scf_parameters[1];
+//   //  double scf_A      = pba->scf_parameters[2];
+//   //  double scf_B      = pba->scf_parameters[3];
 
-  return -scf_lambda*V_e_scf(pba,phi);
-}
+//   return -scf_lambda*V_e_scf(pba,phi);
+// }
 
-double ddV_e_scf(struct background *pba,
-                 double phi
-                 ) {
-  double scf_lambda = pba->scf_parameters[0];
-  //  double scf_alpha  = pba->scf_parameters[1];
-  //  double scf_A      = pba->scf_parameters[2];
-  //  double scf_B      = pba->scf_parameters[3];
+// double ddV_e_scf(struct background *pba,
+//                  double phi
+//                  ) {
+//   double scf_lambda = pba->scf_parameters[0];
+//   //  double scf_alpha  = pba->scf_parameters[1];
+//   //  double scf_A      = pba->scf_parameters[2];
+//   //  double scf_B      = pba->scf_parameters[3];
 
-  return pow(-scf_lambda,2)*V_e_scf(pba,phi);
-}
+//   return pow(-scf_lambda,2)*V_e_scf(pba,phi);
+// }
 
 
 /** parameters and functions for the polynomial coefficient
@@ -2945,57 +3039,99 @@ double ddV_e_scf(struct background *pba,
  * double scf_A = 0.01; (values for their Figure 2)
  */
 
-double V_p_scf(
-               struct background *pba,
-               double phi) {
-  //  double scf_lambda = pba->scf_parameters[0];
-  double scf_alpha  = pba->scf_parameters[1];
-  double scf_A      = pba->scf_parameters[2];
-  double scf_B      = pba->scf_parameters[3];
+// double V_p_scf(
+//                struct background *pba,
+//                double phi) {
+//   //  double scf_lambda = pba->scf_parameters[0];
+//   double scf_alpha  = pba->scf_parameters[1];
+//   double scf_A      = pba->scf_parameters[2];
+//   double scf_B      = pba->scf_parameters[3];
 
-  return  pow(phi - scf_B,  scf_alpha) +  scf_A;
-}
+//   return  pow(phi - scf_B,  scf_alpha) +  scf_A;
+// }
 
-double dV_p_scf(
-                struct background *pba,
-                double phi) {
+// double dV_p_scf(
+//                 struct background *pba,
+//                 double phi) {
 
-  //  double scf_lambda = pba->scf_parameters[0];
-  double scf_alpha  = pba->scf_parameters[1];
-  //  double scf_A      = pba->scf_parameters[2];
-  double scf_B      = pba->scf_parameters[3];
+//   //  double scf_lambda = pba->scf_parameters[0];
+//   double scf_alpha  = pba->scf_parameters[1];
+//   //  double scf_A      = pba->scf_parameters[2];
+//   double scf_B      = pba->scf_parameters[3];
 
-  return   scf_alpha*pow(phi -  scf_B,  scf_alpha - 1);
-}
+//   return   scf_alpha*pow(phi -  scf_B,  scf_alpha - 1);
+// }
 
-double ddV_p_scf(
-                 struct background *pba,
-                 double phi) {
-  //  double scf_lambda = pba->scf_parameters[0];
-  double scf_alpha  = pba->scf_parameters[1];
-  //  double scf_A      = pba->scf_parameters[2];
-  double scf_B      = pba->scf_parameters[3];
+// double ddV_p_scf(
+//                  struct background *pba,
+//                  double phi) {
+//   //  double scf_lambda = pba->scf_parameters[0];
+//   double scf_alpha  = pba->scf_parameters[1];
+//   //  double scf_A      = pba->scf_parameters[2];
+//   double scf_B      = pba->scf_parameters[3];
 
-  return  scf_alpha*(scf_alpha - 1.)*pow(phi -  scf_B,  scf_alpha - 2);
-}
+//   return  scf_alpha*(scf_alpha - 1.)*pow(phi -  scf_B,  scf_alpha - 2);
+// }
 
 /** Fianlly we can obtain the overall potential \f$ V = V_p*V_e \f$
  */
 
+ /* LONG RANGE START */
+ /** AG: The relevant quadratic potential */
+
 double V_scf(
              struct background *pba,
              double phi) {
-  return  V_e_scf(pba,phi)*V_p_scf(pba,phi);
+  return pow(pba->m_scf*pba->H0, 2)*pow(phi, 2)/2; // mass of the scalar field is given in units of H0
 }
 
 double dV_scf(
               struct background *pba,
               double phi) {
-  return dV_e_scf(pba,phi)*V_p_scf(pba,phi) + V_e_scf(pba,phi)*dV_p_scf(pba,phi);
+  return pow(pba->m_scf*pba->H0, 2)*phi;
 }
 
 double ddV_scf(
                struct background *pba,
                double phi) {
-  return ddV_e_scf(pba,phi)*V_p_scf(pba,phi) + 2*dV_e_scf(pba,phi)*dV_p_scf(pba,phi) + V_e_scf(pba,phi)*ddV_p_scf(pba,phi);
+  return pow(pba->m_scf*pba->H0, 2);
 }
+
+/* AG: Mass of the DM particles as function of the scalar field value */
+
+double m_chi(
+             struct background *pba,
+             double G_S,
+             double phi) {
+
+  return sqrt(1+2*sqrt(G_S)*phi); // This is the mass for a scalar DM particle
+  //return 1+sqrt(pba->G_S)*phi; // This is the mass for a fermion DM particle
+}
+
+double dlogm_chi(struct background *pba, double G_S, double phi) {
+  double denom = 1 + 2 * sqrt(G_S) * phi; // for a scalar DM particle
+  //double denom = 1 + sqrt(pba->G_S) * phi; // for a fermion DM particle
+  return 1.0 / denom; 
+
+}
+
+double ddlogm_chi(struct background *pba, double G_S, double phi) {
+  return -2/pow((1+2*sqrt(G_S)*phi), 2); // for a scalar DM particle
+}
+
+// helper transition function
+
+double smooth_transition(struct background *pba, double a, double z_tr) {
+    double a_tr = 1.0/(1.0 + z_tr);
+    double loga = log(a);
+    double loga_tr = log(a_tr);
+    double width = 1e-2; // width in log(a), e.g., 0.01 
+    return 0.5 * (1.0 + tanh((loga - loga_tr)/width));
+}
+
+double G_S_effective(struct background *pba, double a) {
+    double transition = smooth_transition(pba, a, pba->z_tr);
+    return pba->G_S * transition;
+}
+
+/* LONG RANGE END */
