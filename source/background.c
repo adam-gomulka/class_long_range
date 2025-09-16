@@ -447,14 +447,10 @@ int background_functions(
   /* chi */
   if (pba->has_chi == _TRUE_) {
 
-    //double loga = log(a);
-    //double loga_tr = log(1/(1+pba->z_tr));
-    // double width = 1e-2; // width in log(a), e.g., 0.01
-    // double transition = smooth_transition(pba, a, pba->z_tr, width);
-
     double G_S_eff = G_S_effective(pba, a);
+    double G_S_eff_ini = G_S_effective(pba, 1/(1+pba->z_tr));
     
-    pvecback[pba->index_bg_rho_chi] = pba->Omega0_chi * (m_chi(pba, G_S_eff, pvecback_B[pba->index_bi_phi_scf])/m_chi(pba, 0.0, pba->phi_ini_scf)) *pow(pba->H0,2) / pow(a,3);
+    pvecback[pba->index_bg_rho_chi] = pba->Omega0_chi * (m_chi(pba, pba->G_S, pvecback_B[pba->index_bi_phi_scf])/m_chi(pba, pba->G_S, pba->phi_ini_scf)) *pow(pba->H0,2) / pow(a,3);
     rho_tot += pvecback[pba->index_bg_rho_chi];
     p_tot += 0.;
     rho_m += pvecback[pba->index_bg_rho_chi];
@@ -2729,18 +2725,14 @@ int background_derivs(
     /* LONG RANGE START */
     // add the coupling term to the scalar field equations if beta != 0
     if (pba->beta != 0.0) {
-      // double loga = log(a);
-      // double loga_tr = log(1/(1+pba->z_tr));
-      // double width = 1e-2; // width in log(a), e.g., 0.01 dex
-      // double transition = 0.5 * (1.0 + tanh((loga - loga_tr)/width));
 
       // make G_S undergo transition
       double G_S_eff = G_S_effective(pba, a);
 
-      double dlogm_chi_val = dlogm_chi(pba, G_S_eff, phi);
+      double dlogm_chi_val = dlogm_chi(pba, pba->G_S, phi);
 
       double rho_chi = pvecback[pba->index_bg_rho_chi];
-      double prefactor = 3*G_S_eff;
+      double prefactor = 3*sqrt(G_S_effective(pba, a));
       double coupling_term = prefactor * dlogm_chi_val * rho_chi;
 
       dy[pba->index_bi_phi_prime_scf] += -a * coupling_term/ H;
@@ -3121,16 +3113,40 @@ double ddlogm_chi(struct background *pba, double G_S, double phi) {
 
 // helper transition function
 
-double smooth_transition(struct background *pba, double a, double z_tr) {
+double sharp_transition(struct background *pba, double a, double z_tr) { // Not suitable for differential equations solver
+    double a_tr = 1.0/(1.0 + z_tr);
+    if (a < a_tr) {
+        return 0.0;
+    } else {
+        return 1.0;
+    }
+}
+
+double smooth_transition(struct background *pba, double a, double z_tr) { // Suitable for differential equations solver, but derivatvie at z_tr is non-zero.
+  // cosine or line instead? 
     double a_tr = 1.0/(1.0 + z_tr);
     double loga = log(a);
     double loga_tr = log(a_tr);
-    double width = 1e-2; // width in log(a), e.g., 0.01 
+    double width = 0.01; // width in log(a), e.g., 0.01 
     return 0.5 * (1.0 + tanh((loga - loga_tr)/width));
 }
 
+double cosine_transition(struct background *pba, double a, double z_tr) { // Suitable for differential equations solver, derivative at z_tr is zero.
+    double a_tr = 1.0/(1.0 + z_tr);
+    double loga = log(a);
+    double loga_tr = log(a_tr);
+    double width = 0.01; // width in log(a), e.g., 0.01 
+    if (loga < loga_tr) {
+        return 0.0;
+    } else if (loga > loga_tr + 2*width) {
+        return 1.0;
+    } else {
+        return 0.5 * (1.0 + cos(_PI_ * (loga - loga_tr) / (2.0 * width)+ _PI_));
+    }
+}
+
 double G_S_effective(struct background *pba, double a) {
-    double transition = smooth_transition(pba, a, pba->z_tr);
+    double transition = cosine_transition(pba, a, pba->z_tr);
     return pba->G_S * transition;
 }
 

@@ -1718,7 +1718,7 @@ int input_read_parameters(struct file_content * pfc,
         double omega0_ur = ba_temp.Omega0_ur*h*h;
         double omega0_cdm = ba_temp.Omega0_cdm*h*h;
         /* Change this into actual Omega0_chi */
-        double omega0_chi = ba_temp.Omega0_chi * (m_chi(pba, ba_temp.G_S, phi_today) / m_chi(pba, 0.0, ba_temp.phi_ini_scf))*h*h; // this is the present day DM density according to Eq. (3.6)
+        double omega0_chi = ba_temp.Omega0_chi * (m_chi(pba, ba_temp.G_S, phi_today) / m_chi(pba, ba_temp.G_S, ba_temp.phi_ini_scf))*h*h; // this is the present day DM density according to Eq. (3.6)
         double omega0_scf_temp = (ba_temp.background_table[(ba_temp.bt_size-1)*ba_temp.bg_size+ba_temp.index_bg_rho_scf] / 
                              req_rho_tot)*h*h;
         double omega0_ncdm = 0.0;
@@ -3454,7 +3454,7 @@ int input_read_parameters_species(struct file_content * pfc,
         /* LONG RANGE START */
         else { 
           pba->phi_ini_scf = 1/sqrt(pba->G_S)*pba->scf_parameters[pba->scf_parameters_size-2]; // s_ini*1/sqrt(G_S)
-          pba->phi_prime_ini_scf = 0.0; // it's sth proportiaonal to beta in original implementation w/o transition, so here it'll be just zero
+          pba->phi_prime_ini_scf = pba->scf_parameters[pba->scf_parameters_size-1]*(-3/4)*pba->beta*(dlogm_chi(pba, pba->G_S, pba->phi_ini_scf))*pba->Omega0_chi/sqrt(pba->Omega0_g+pba->Omega0_ur)*pba->H0;; // it's sth proportiaonal to beta in original implementation w/o transition, so here it'll be just zero
         }
         /* LONG RANGE END   */
       }

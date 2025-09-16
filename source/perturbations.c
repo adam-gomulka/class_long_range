@@ -9583,7 +9583,7 @@ int perturbations_derivs(double tau,
 
       /** - ----> Klein Gordon equation in SYNC GAUGE! */
       // Remember that phi is given in units of m_{pl}
-      if (ppt->gauge == synchronous) {
+      // if (ppt->gauge == synchronous) {
         dy[pv->index_pt_phi_prime_scf] =  - 2.*a_prime_over_a*y[pv->index_pt_phi_prime_scf]
           - metric_continuity*pvecback[pba->index_bg_phi_prime_scf] //  metric_continuity = h'/2
           - (k2 + a2*pvecback[pba->index_bg_ddV_scf])*y[pv->index_pt_phi_scf]; //checked
@@ -9596,22 +9596,22 @@ int perturbations_derivs(double tau,
           - 3* a2 * sqrt(G_S_eff)*pvecback[pba->index_bg_rho_chi]*dlogm_chi(pba,  G_S_eff, pvecback[pba->index_bg_phi_scf])*y[pv->index_pt_delta_chi] // factor of three appears due to units in which rho and G_S are written i.e.
           - 3* a2 * G_S_eff*pvecback[pba->index_bg_rho_chi]*ddlogm_chi(pba,  G_S_eff, pvecback[pba->index_bg_phi_scf])*y[pv->index_pt_phi_scf]; // \rho^{class} = 1/(3 m_{pl}^2) \rho^{physical} and G_S^class = G_S^physical*(m_{pl}^2)
         }
-      }
+      // }
 
-      else{
-        /* newtonian gauge */
-        dy[pv->index_pt_phi_prime_scf] = - 2.*a_prime_over_a*y[pv->index_pt_phi_prime_scf]
-          - (metric_continuity-dy[ppw->index_mt_psi])*pvecback[pba->index_bg_phi_prime_scf] //dy[ppw->index_mt_psi], does it make sense? Let's approx phi=psi? 
-          - (k2 + a2*pvecback[pba->index_bg_ddV_scf])*y[pv->index_pt_phi_scf]; //checked
+      // else{
+      //   /* newtonian gauge */
+      //   dy[pv->index_pt_phi_prime_scf] = - 2.*a_prime_over_a*y[pv->index_pt_phi_prime_scf]
+      //     - (metric_continuity-dy[ppw->index_mt_psi])*pvecback[pba->index_bg_phi_prime_scf] //dy[ppw->index_mt_psi], does it make sense? Let's approx phi=psi? 
+      //     - (k2 + a2*pvecback[pba->index_bg_ddV_scf])*y[pv->index_pt_phi_scf]; //checked
 
-        if (pba->has_chi == _TRUE_ && pba->beta != 0.0) {
-          double G_S_eff = G_S_effective(pba, a);
-          dy[pv->index_pt_phi_prime_scf] +=
-          - a2* pow(G_S_eff, 1)*2* pvecback[pba->index_bg_dV_scf]*pvecmetric[ppw->index_mt_psi]
-          - 3* a2 * pow(G_S_eff, 3/2)*pvecback[pba->index_bg_rho_chi]*dlogm_chi(pba,  G_S_eff, pvecback[pba->index_bg_phi_scf])*(y[pv->index_pt_delta_chi]+2*pvecmetric[ppw->index_mt_psi]) // factor of three appears due to units in which rho and G_S are written i.e.
-          - 3* a2 * G_S_eff*pvecback[pba->index_bg_rho_chi]*ddlogm_chi(pba,  G_S_eff, pvecback[pba->index_bg_phi_scf])*y[pv->index_pt_phi_scf]; // \rho^{class} = 1/(3 m_{pl}^2) \rho^{physical} and G_S^class = G_S^physical*(m_{pl}^2)
-        }
-      }
+      //   if (pba->has_chi == _TRUE_ && pba->beta != 0.0) {
+      //     double G_S_eff = G_S_effective(pba, a);
+      //     dy[pv->index_pt_phi_prime_scf] +=
+      //     - a2* pow(G_S_eff, 1)*2* pvecback[pba->index_bg_dV_scf]*pvecmetric[ppw->index_mt_psi]
+      //     - 3* a2 * pow(G_S_eff, 3/2)*pvecback[pba->index_bg_rho_chi]*dlogm_chi(pba,  G_S_eff, pvecback[pba->index_bg_phi_scf])*(y[pv->index_pt_delta_chi]+2*pvecmetric[ppw->index_mt_psi]) // factor of three appears due to units in which rho and G_S are written i.e.
+      //     - 3* a2 * G_S_eff*pvecback[pba->index_bg_rho_chi]*ddlogm_chi(pba,  G_S_eff, pvecback[pba->index_bg_phi_scf])*y[pv->index_pt_phi_scf]; // \rho^{class} = 1/(3 m_{pl}^2) \rho^{physical} and G_S^class = G_S^physical*(m_{pl}^2)
+      //   }
+      // }
 
       /* LONG RANGE END*/
     }
@@ -9627,8 +9627,8 @@ int perturbations_derivs(double tau,
 
         if (pba->beta != 0.0) {
           double G_S_eff = G_S_effective(pba, a);
-          double coupling_term_1 = dlogm_chi(pba,  G_S_eff, pvecback[pba->index_bg_phi_scf]) * sqrt(G_S_eff) * y[pv->index_pt_phi_prime_scf];
-          double coupling_term_2 = ddlogm_chi(pba,  G_S_eff, pvecback[pba->index_bg_phi_scf]) * G_S_eff * pvecback[pba->index_bg_phi_prime_scf] * y[pv->index_pt_phi_scf];
+          double coupling_term_1 = dlogm_chi(pba,  pba->G_S, pvecback[pba->index_bg_phi_scf]) * sqrt(G_S_eff) * y[pv->index_pt_phi_prime_scf];
+          double coupling_term_2 = ddlogm_chi(pba,  pba->G_S, pvecback[pba->index_bg_phi_scf]) * G_S_eff * pvecback[pba->index_bg_phi_prime_scf] * y[pv->index_pt_phi_scf];
           dy[pv->index_pt_delta_chi] += coupling_term_1 + coupling_term_2;
         }
 
@@ -9637,8 +9637,8 @@ int perturbations_derivs(double tau,
         if (pba->beta != 0.0) {
           /* Add coupling terms separately */
           double G_S_eff = G_S_effective(pba, a);
-          double hubble_coupling = -dlogm_chi(pba,  G_S_eff, pvecback[pba->index_bg_phi_scf])*sqrt(G_S_eff)*pvecback[pba->index_bg_phi_prime_scf] * y[pv->index_pt_theta_chi];
-          double metric_coupling = +k2*dlogm_chi(pba,  G_S_eff, pvecback[pba->index_bg_phi_scf]) * sqrt(G_S_eff) * y[pv->index_pt_phi_scf];
+          double hubble_coupling = -dlogm_chi(pba,  pba->G_S, pvecback[pba->index_bg_phi_scf])*sqrt(G_S_eff)*pvecback[pba->index_bg_phi_prime_scf] * y[pv->index_pt_theta_chi];
+          double metric_coupling = +k2*dlogm_chi(pba,  pba->G_S, pvecback[pba->index_bg_phi_scf]) * sqrt(G_S_eff) * y[pv->index_pt_phi_scf];
           //printf("Hubble coupling: %e, Metric coupling: %e\n", hubble_coupling, metric_coupling);
                   
           dy[pv->index_pt_theta_chi] += hubble_coupling + metric_coupling;
@@ -9652,16 +9652,16 @@ int perturbations_derivs(double tau,
         dy[pv->index_pt_delta_chi] = -(y[pv->index_pt_theta_chi]+metric_continuity); /* chi density */
         if (pba->beta != 0.0) {
           double G_S_eff = G_S_effective(pba, a);
-          double coupling_term_1 = dlogm_chi(pba,  G_S_eff, pvecback[pba->index_bg_phi_scf]) * sqrt(G_S_eff) * y[pv->index_pt_phi_prime_scf];
-          double coupling_term_2 = ddlogm_chi(pba,  G_S_eff, pvecback[pba->index_bg_phi_scf]) * G_S_eff * pvecback[pba->index_bg_phi_prime_scf] * y[pv->index_pt_phi_scf];
+          double coupling_term_1 = dlogm_chi(pba,  pba->G_S, pvecback[pba->index_bg_phi_scf]) * sqrt(G_S_eff) * y[pv->index_pt_phi_prime_scf];
+          double coupling_term_2 = ddlogm_chi(pba,  pba->G_S, pvecback[pba->index_bg_phi_scf]) * G_S_eff * pvecback[pba->index_bg_phi_prime_scf] * y[pv->index_pt_phi_scf];
           dy[pv->index_pt_delta_chi] += coupling_term_1 + coupling_term_2;
         }
         dy[pv->index_pt_theta_chi] = - a_prime_over_a*y[pv->index_pt_theta_chi]+metric_euler; /* chi velocity */
         if (pba->beta != 0.0) {
           double G_S_eff = G_S_effective(pba, a);
           /* Add coupling terms separately */
-          double hubble_coupling = -dlogm_chi(pba,  G_S_eff, pvecback[pba->index_bg_phi_scf])*sqrt(G_S_eff)*pvecback[pba->index_bg_phi_prime_scf] * y[pv->index_pt_theta_chi];
-          double metric_coupling = +k2*dlogm_chi(pba,  G_S_eff, pvecback[pba->index_bg_phi_scf]) * sqrt(G_S_eff) * y[pv->index_pt_phi_scf];
+          double hubble_coupling = -dlogm_chi(pba, pba->G_S, pvecback[pba->index_bg_phi_scf])*sqrt(G_S_eff)*pvecback[pba->index_bg_phi_prime_scf] * y[pv->index_pt_theta_chi];
+          double metric_coupling = +k2*dlogm_chi(pba, pba->G_S, pvecback[pba->index_bg_phi_scf]) * sqrt(G_S_eff) * y[pv->index_pt_phi_scf];
           dy[pv->index_pt_theta_chi] += hubble_coupling + metric_coupling;
         }
       }
