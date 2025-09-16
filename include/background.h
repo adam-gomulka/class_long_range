@@ -616,6 +616,12 @@ extern "C" {
                           double z_tr
 );
 
+double sharp_transition(
+                      struct background *pba, 
+                      double a, 
+                      double z_tr
+);
+
 double G_S_effective(
                       struct background *pba, 
                       double a
