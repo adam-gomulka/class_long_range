@@ -449,8 +449,8 @@ int background_functions(
 
     double G_S_eff = G_S_effective(pba, a);
     double G_S_eff_ini = G_S_effective(pba, 1/(1+pba->z_tr));
-    
-    pvecback[pba->index_bg_rho_chi] = pba->Omega0_chi * (m_chi(pba, pba->G_S, pvecback_B[pba->index_bi_phi_scf])/m_chi(pba, pba->G_S, pba->phi_ini_scf)) *pow(pba->H0,2) / pow(a,3);
+
+    pvecback[pba->index_bg_rho_chi] = pba->Omega0_chi * (m_chi(pba, G_S_eff, pvecback_B[pba->index_bi_phi_scf])/m_chi(pba, G_S_eff_ini, pba->phi_ini_scf)) *pow(pba->H0,2) / pow(a,3);
     rho_tot += pvecback[pba->index_bg_rho_chi];
     p_tot += 0.;
     rho_m += pvecback[pba->index_bg_rho_chi];
@@ -2729,10 +2729,10 @@ int background_derivs(
       // make G_S undergo transition
       double G_S_eff = G_S_effective(pba, a);
 
-      double dlogm_chi_val = dlogm_chi(pba, pba->G_S, phi);
+      double dlogm_chi_val = dlogm_chi(pba, G_S_eff, phi);
 
       double rho_chi = pvecback[pba->index_bg_rho_chi];
-      double prefactor = 3*sqrt(G_S_effective(pba, a));
+      double prefactor = 3*sqrt(G_S_eff);
       double coupling_term = prefactor * dlogm_chi_val * rho_chi;
 
       dy[pba->index_bi_phi_prime_scf] += -a * coupling_term/ H;
